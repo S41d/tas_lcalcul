@@ -5,6 +5,7 @@ type ptype =
   | Var of string
   | Arr of ptype * ptype
   | Nat
+  | N
 
 let rec show_ptype = function
   | Var x -> x
@@ -88,18 +89,16 @@ let rec unify equations timeout =
   if timeout = 0 then raise Timeout
   else
     match equations with
-    | [] -> []
-    | _ -> 
-      match unify_step equations with
-      | Ok eqs -> unify eqs (timeout - 1)
-      | Error msg -> raise (Failure msg)
+    | [] -> Ok []
+    | _ -> Result.map (fun x -> x) (unify equations (timeout - 1))
 ;;
 
-let rec infer_type term env =
+let infer_type term env =
   let res_type = Var (new_var_t ()) in
   let equations = generate_equa term res_type env in
   match unify equations 100 with
-  | equations ->
+  | Ok [] -> res_type
+  | Ok equations ->
     List.fold_left
       (fun ty (t1, t2) ->
          match t1 with
@@ -107,5 +106,5 @@ let rec infer_type term env =
          | _ -> ty)
       res_type
       equations
-  | exception Failure msg -> failwith msg
+  | Error msg -> failwith msg
 ;;
