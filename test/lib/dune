@@ -1,0 +1,4 @@
+(library
+  (name shared)
+  (public_name lcalcul_interpreter.shared)
+  (libraries alcotest lcalcul_interpreter))

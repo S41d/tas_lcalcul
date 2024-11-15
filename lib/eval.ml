@@ -4,10 +4,17 @@ type pterm =
   | Var of string
   | App of pterm * pterm
   | Abs of string * pterm
+
   | Int of int
   | Add of pterm * pterm
   | Sub of pterm * pterm
+
   | TList of pterm list
+  | Cons of pterm * pterm
+  | Nil
+  | Hd of pterm
+  | Tl of pterm
+
   | IfZero of pterm * pterm * pterm
   | IfEmpty of pterm * pterm * pterm
   | Fix of pterm
@@ -18,10 +25,17 @@ let rec show_pterm_simp t =
   | Var id -> id
   | Abs (id, t) -> sprintf "\\%s . %s" id (show_pterm_simp t)
   | App (t1, t2) -> sprintf "(%s %s)" (show_pterm_simp t1) (show_pterm_simp t2)
+
   | Int n -> string_of_int n
   | Add (t1, t2) -> sprintf "(%s + %s)" (show_pterm_simp t1) (show_pterm_simp t2)
   | Sub (t1, t2) -> sprintf "(%s - %s)" (show_pterm_simp t1) (show_pterm_simp t2)
+
   | TList l -> sprintf "[%s]" (String.concat "; " (List.map show_pterm_simp l))
+  | Cons (h, t) -> sprintf "(%s :: %s)" (show_pterm_simp h) (show_pterm_simp t)
+  | Nil -> "[]"
+  | Hd l -> sprintf "hd %s" (show_pterm_simp l)
+  | Tl l -> sprintf "tl %s" (show_pterm_simp l)
+
   | IfZero (c, t, e) -> sprintf "ifz %s then %s else %s" (show_pterm_simp c) (show_pterm_simp t) (show_pterm_simp e)
   | IfEmpty (c, t, e) -> sprintf "ife %s then %s else %s" (show_pterm_simp c) (show_pterm_simp t) (show_pterm_simp e)
   | Fix t -> sprintf "fix %s" (show_pterm_simp t)
@@ -31,12 +45,12 @@ let rec show_pterm_simp t =
 let show_pterm t =
   let rec aux t was_abs =
     match t with
-    | Var id when was_abs -> sprintf " . %s" id
+    | Var id when was_abs -> sprintf ". %s" id
     | Var id -> id
-    | App (t1, t2) when was_abs -> sprintf " . (%s %s)" (aux t1 false) (aux t2 false)
+    | App (t1, t2) when was_abs -> sprintf ". (%s %s)" (aux t1 false) (aux t2 false)
     | App (t1, t2) -> sprintf "(%s %s)" (aux t1 false) (aux t2 false)
-    | Abs (id, t) when was_abs -> sprintf "%s%s" id (aux t true)
-    | Abs (id, t) -> sprintf "\\%s%s" id (aux t true)
+    | Abs (id, t) when was_abs -> sprintf "%s %s" id (aux t true)
+    | Abs (id, t) -> sprintf "(\\%s %s)" id (aux t true)
     | _ -> show_pterm_simp t
   in
   aux t false
@@ -65,10 +79,17 @@ let rec alphaconv term =
       let nvar = new_var () in
       Abs (nvar, aux id nvar passed)
     | App (t1, t2) -> App (aux cur_var repl_var t1, aux cur_var repl_var t2)
+
     | Int _ as n -> n
     | Add (t1, t2) -> Add (aux cur_var repl_var t1, aux cur_var repl_var t2)
     | Sub (t1, t2) -> Sub (aux cur_var repl_var t1, aux cur_var repl_var t2)
+
     | TList terms -> TList (List.map (aux cur_var repl_var) terms)
+    | Cons (h, t) -> Cons (aux cur_var repl_var h, aux cur_var repl_var t)
+    | Nil -> Nil
+    | Hd l -> Hd (aux cur_var repl_var l)
+    | Tl l -> Tl (aux cur_var repl_var l)
+
     | IfZero (cond, t, e) -> IfZero (aux cur_var repl_var cond, aux cur_var repl_var t, aux cur_var repl_var e)
     | IfEmpty (cond, t, e) -> IfEmpty (aux cur_var repl_var cond, aux cur_var repl_var t, aux cur_var repl_var e)
     | Fix t -> Fix (aux cur_var repl_var t)
@@ -83,10 +104,17 @@ let rec alphaconv term =
     (match t1, t2 with
      | Var id1, Var id2 when id1 = id2 -> let nvar = new_var () in App (Var nvar, Var nvar)
      | t1, t2 -> App (alphaconv t1, alphaconv t2))
+
   | Int _ -> term
   | Add (t1, t2) -> Add (alphaconv t1, alphaconv t2)
   | Sub (t1, t2) -> Sub (alphaconv t1, alphaconv t2)
+
   | TList terms -> TList (List.map alphaconv terms)
+  | Cons (h, t) -> Cons (alphaconv h, alphaconv t)
+  | Nil -> Nil
+  | Hd l -> Hd (alphaconv l)
+  | Tl l -> Tl (alphaconv l)
+
   | IfZero (cond, tthen, telse) -> IfZero (alphaconv cond, alphaconv tthen, alphaconv telse)
   | IfEmpty (cond, tthen, telse) -> IfEmpty (alphaconv cond, alphaconv tthen, alphaconv telse)
   | Fix t -> Fix (alphaconv t)
@@ -97,10 +125,17 @@ let rec subst id to_put = function
   | Var v -> if v = id then to_put else Var v
   | Abs (v, t) -> Abs (v, subst id to_put t)
   | App (t1, t2) -> App (subst id to_put t1, subst id to_put t2)
+
   | Int _ as n -> n
   | Add (t1, t2) -> Add (subst id to_put t1, subst id to_put t2)
   | Sub (t1, t2) -> Sub (subst id to_put t1, subst id to_put t2)
+
   | TList terms -> TList (List.map (fun x -> subst id to_put x) terms)
+  | Cons (h, t) -> Cons (subst id to_put h, subst id to_put t)
+  | Nil -> Nil
+  | Hd l -> Hd (subst id to_put l)
+  | Tl l -> Tl (subst id to_put l)
+
   | IfZero (cond, tthen, telse) -> IfZero ((subst id to_put cond), (subst id to_put tthen), (subst id to_put telse))
   | IfEmpty (cond, tthen, telse) -> IfEmpty ((subst id to_put cond), (subst id to_put tthen), (subst id to_put telse))
   | Fix t -> subst id to_put t
@@ -122,7 +157,7 @@ let rec ltr_ctb_step t =
       | None -> None
   in
   match t with
-  | Abs (x, t) -> Option.map (fun step_t -> Abs (x, step_t)) (ltr_ctb_step t)
+  | Abs (x, t) -> Option.map (fun t' -> Abs (x, t')) (ltr_ctb_step t)
   | App (Abs (x, t), targ) when is_value targ -> Some (subst x targ t)
   | App (tfun, targ) -> Option.map (fun (l, r) -> App (l, r)) (step_lr tfun targ)
   | Var _ -> None
@@ -152,6 +187,14 @@ let rec ltr_ctb_step t =
           of the list are reduceable as they are all of the same type *)
        | _ -> Some (TList (List.map (fun x -> Option.get(x)) res)))
 
+  | Cons (h, t) ->
+    (match step_lr h t with
+     | None -> Some (TList (h::[t]))
+     | Some (l, r) -> Some (Cons (l, r)))
+  | Nil -> None
+  | Hd l -> Option.map (fun t -> Hd t) (ltr_ctb_step l)
+  | Tl l -> Option.map (fun t -> Tl t) (ltr_ctb_step l)
+
   | IfZero (cond, tthen, telse) ->
     (match ltr_ctb_step cond with
      | Some t -> Some (IfZero (t, tthen, telse))
@@ -176,10 +219,13 @@ let rec ltr_ctb_step t =
      | None -> Option.map (fun t -> Let (id, te, t)) (ltr_ctb_step tin))
 ;;
 
-let rec ltr_cbv_norm t =
-  match ltr_ctb_step t with
-  | Some x -> ltr_cbv_norm x
-  | None -> t
+
+let ltr_cbv_norm t =
+  let rec aux t =
+    match ltr_ctb_step t with
+    | Some x -> aux x
+    | None -> t
+  in aux @@ alphaconv t
 ;;
 
 let rec ltr_cbv_norm_timeout t n =
