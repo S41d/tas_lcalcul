@@ -64,6 +64,21 @@ let rec equal_pterm t1 t2 =
   | Var _, Var _ -> true
   | App (lt1, lt2), App (rt1, rt2) -> equal_pterm lt1 rt1 && equal_pterm lt2 rt2
   | Abs (_, t1), Abs (_, t2) -> equal_pterm t1 t2
+
+  | Int n1, Int n2 -> n1 = n2
+  | Add (lt1, lt2), Add (rt1, rt2) -> (equal_pterm lt1 rt1 && equal_pterm lt2 rt2) || (equal_pterm lt1 rt2 && equal_pterm lt2 rt1)
+  | Sub (lt1, lt2), Sub (rt1, rt2) -> equal_pterm lt1 rt1 && equal_pterm lt2 rt2
+
+  | TList l1, TList l2 -> List.length l1 = List.length l2 && List.for_all2 equal_pterm l1 l2
+  | Cons (lh1, lt1), Cons (lh2, lt2) -> equal_pterm lh1 lh2 && equal_pterm lt1 lt2
+  | Nil, Nil -> true
+  | Hd l1, Hd l2 -> equal_pterm l1 l2
+  | Tl l1, Tl l2 -> equal_pterm l1 l2
+
+  | IfZero (c1, t1, e1), IfZero (c2, t2, e2) -> equal_pterm c1 c2 && equal_pterm t1 t2 && equal_pterm e1 e2
+  | IfEmpty (c1, t1, e1), IfEmpty (c2, t2, e2) -> equal_pterm c1 c2 && equal_pterm t1 t2 && equal_pterm e1 e2
+  | Fix t1, Fix t2 -> equal_pterm t1 t2
+  | Let (_, t1, tin1), Let (_, t2, tin2) -> equal_pterm t1 t2 && equal_pterm tin1 tin2
   | _ -> false
 ;;
 
@@ -118,7 +133,9 @@ let rec alphaconv term =
   | IfZero (cond, tthen, telse) -> IfZero (alphaconv cond, alphaconv tthen, alphaconv telse)
   | IfEmpty (cond, tthen, telse) -> IfEmpty (alphaconv cond, alphaconv tthen, alphaconv telse)
   | Fix t -> Fix (alphaconv t)
-  | Let (id, t1, t2) -> Let (id, alphaconv t1, alphaconv t2)
+  | Let (id, t1, t2) ->
+      let nvar = new_var () in
+      Let (nvar, aux id nvar t1, aux id nvar t2)
 ;;
 
 let rec subst id to_put = function
@@ -189,34 +206,50 @@ let rec ltr_ctb_step t =
 
   | Cons (h, t) ->
     (match step_lr h t with
-     | None -> Some (TList (h::[t]))
-     | Some (l, r) -> Some (Cons (l, r)))
-  | Nil -> None
-  | Hd l -> Option.map (fun t -> Hd t) (ltr_ctb_step l)
-  | Tl l -> Option.map (fun t -> Tl t) (ltr_ctb_step l)
+     | Some (l, r) -> Some (Cons (l, r))
+     | None -> match t with
+       | Nil -> Some (TList [h])
+       | TList l -> Some (TList (h :: l))
+       | _ -> None)
+
+  | Nil -> Some (TList [])
+
+  | Hd l ->
+    (match ltr_ctb_step l with
+     | Some t -> Some (Hd t)
+     | None -> match l with
+       |  TList (h :: _)-> Some h
+       |  _ -> None)
+
+  | Tl l ->
+    (match ltr_ctb_step l with
+     | Some t -> Some (Tl t)
+     | None -> match l with
+       |  TList (_ :: tl)-> Some (TList tl)
+       |  _ -> None)
 
   | IfZero (cond, tthen, telse) ->
     (match ltr_ctb_step cond with
      | Some t -> Some (IfZero (t, tthen, telse))
      | None -> match cond with
-       | Int 0 -> ltr_ctb_step tthen
-       | Int _ -> ltr_ctb_step telse
-       | _ -> failwith "Type error, expected number in IfZero condition")
+       | Int 0 -> Some tthen
+       | Int _ -> Some telse
+       | _ -> None)
 
   | IfEmpty (cond, tthen, telse) ->
     (match ltr_ctb_step cond with
      | Some t -> Some (IfEmpty (t, tthen, telse))
      | None -> match cond with
-       | TList [] -> ltr_ctb_step tthen
-       | TList _ -> ltr_ctb_step telse
-       | _ -> failwith "Type error, expected list in IfEmpty condition")
+       | TList [] -> Some tthen
+       | TList _ -> Some telse
+       | _ -> None)
 
   | Fix t -> Option.map (fun t -> Fix t) (ltr_ctb_step t)
 
   | Let (id, te, tin) ->
     (match ltr_ctb_step te with
      | Some t -> Some (Let (id, t, tin))
-     | None -> Option.map (fun t -> Let (id, te, t)) (ltr_ctb_step tin))
+     | None -> Some (subst id te tin))
 ;;
 
 

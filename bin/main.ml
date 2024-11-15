@@ -1,7 +1,6 @@
 open Lib.Eval
 
 let () =
-  let t = Abs ("f", Abs ("g", App (Var "f", Var "g"))) in
-  t |> show_pterm |> print_endline;
-  t |> alphaconv |> show_pterm |> print_endline;
+  let l = IfEmpty (Nil, Int 1, Int 2) |> ltr_cbv_norm in
+  show_pterm l |> print_endline
 ;;
