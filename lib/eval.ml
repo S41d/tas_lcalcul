@@ -45,12 +45,12 @@ let rec show_pterm_simp t =
 let show_pterm t =
   let rec aux t was_abs =
     match t with
-    | Var id when was_abs -> sprintf ". %s" id
+    | Var id when was_abs -> sprintf " . %s" id
     | Var id -> id
     | App (t1, t2) when was_abs -> sprintf ". (%s %s)" (aux t1 false) (aux t2 false)
     | App (t1, t2) -> sprintf "(%s %s)" (aux t1 false) (aux t2 false)
-    | Abs (id, t) when was_abs -> sprintf "%s %s" id (aux t true)
-    | Abs (id, t) -> sprintf "(\\%s %s)" id (aux t true)
+    | Abs (id, t) when was_abs -> sprintf "%s%s" id (aux t true)
+    | Abs (id, t) -> sprintf "(\\%s%s)" id (aux t true)
     | _ -> show_pterm_simp t
   in
   aux t false
@@ -82,9 +82,26 @@ let rec equal_pterm t1 t2 =
   | _ -> false
 ;;
 
-let counter : int ref = ref 0
-
-let new_var () = incr counter; "x" ^ string_of_int !counter;;
+(* created by chatgpt *)
+let create_var_generator () =
+  let counter = ref 1 in
+  let current_char = ref 'a' in
+  fun () ->
+    let result =
+      if !counter = 1 then
+        Printf.sprintf "%c" !current_char
+      else
+        Printf.sprintf "%c%d" !current_char !counter
+    in
+    (* Move to the next character *)
+    if !current_char = 'z' then (
+      current_char := 'a';
+      incr counter
+    ) else
+      current_char := Char.chr (Char.code !current_char + 1);
+    result
+;;
+let new_var = create_var_generator ()
 
 let rec alphaconv term =
   let rec aux cur_var repl_var = function
@@ -134,8 +151,8 @@ let rec alphaconv term =
   | IfEmpty (cond, tthen, telse) -> IfEmpty (alphaconv cond, alphaconv tthen, alphaconv telse)
   | Fix t -> Fix (alphaconv t)
   | Let (id, t1, t2) ->
-      let nvar = new_var () in
-      Let (nvar, aux id nvar t1, aux id nvar t2)
+    let nvar = new_var () in
+    Let (nvar, aux id nvar t1, aux id nvar t2)
 ;;
 
 let rec subst id to_put = function
@@ -174,18 +191,26 @@ let rec ltr_ctb_step t =
       | None -> None
   in
   match t with
-  | Abs (x, t) -> Option.map (fun t' -> Abs (x, t')) (ltr_ctb_step t)
-  | App (Abs (x, t), targ) when is_value targ -> Some (subst x targ t)
-  | App (tfun, targ) -> Option.map (fun (l, r) -> App (l, r)) (step_lr tfun targ)
+  | Abs (x, t) ->
+    Option.map (fun t' -> Abs (x, t')) (ltr_ctb_step t)
+
+  | App (Abs (x, t), targ) when is_value targ ->
+    Some (subst x targ t)
+
+  | App (tfun, targ) ->
+    Option.map (fun (l, r) -> App (l, r)) (step_lr tfun targ)
+
   | Var _ -> None
 
   | Int _ -> None
+
   | Add (t1, t2) ->
     (match step_lr t1 t2 with
      | Some (l, r) -> Some (Add (l, r))
      | None -> match t1, t2 with
        | Int n1, Int n2 -> Some (Int (n1 + n2))
        | _ -> None)
+
   | Sub (t1, t2) ->
     (match step_lr t1 t2 with
      | Some (l, r) -> Some (Add (l, r))
@@ -252,13 +277,12 @@ let rec ltr_ctb_step t =
      | None -> Some (subst id te tin))
 ;;
 
-
 let ltr_cbv_norm t =
   let rec aux t =
     match ltr_ctb_step t with
     | Some x -> aux x
     | None -> t
-  in aux @@ alphaconv t
+  in aux (alphaconv t)
 ;;
 
 let rec ltr_cbv_norm_timeout t n =
