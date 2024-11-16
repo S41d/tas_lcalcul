@@ -1,14 +1,15 @@
 (test
   (name eval2)
-  (flags (:standard -w -a))
   (libraries alcotest lcalcul_interpreter.shared))
 
 (test
   (name type3)
-  (flags (:standard -w -a))
   (libraries alcotest lcalcul_interpreter.shared))
 
 (test
   (name eval4)
-  (flags (:standard -w -a))
+  (libraries alcotest lcalcul_interpreter.shared))
+
+(test
+  (name type4)
   (libraries alcotest lcalcul_interpreter.shared))
