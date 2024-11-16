@@ -20,15 +20,15 @@ let test actual expected () =
   check pterm_test_eq "equal" expected (ltr_cbv_norm actual)
 ;;
 
-let test_II = test (App (i, i)) i
-let test_SII = test (App (App (s, i), i)) (Abs (y, App (Var y, Var y)))
-let test_SKK = test (App (App (s, k), k)) i
-let test_deltaII = test (App (delta, App (i, i))) i
-let test_plus_one_two = test (App (App (add, one), two)) three
-let test_plus_two_two = test (App (App (add, two), two)) four
-let test_mul_one_two = test (App (App (mul, one), two)) two
-let test_mul_two_two = test (App (App (mul, two), two)) four
-let test_pow_two_two = test (App (App (pow, two), two)) four
+let test_II           = test (App (i, i))                  i
+let test_SII          = test (App (App (s, i), i))         (Abs (y, App (Var y, Var y)))
+let test_SKK          = test (App (App (s, k), k))         i
+let test_deltaII      = test (App (delta, App (i, i)))     i
+let test_plus_one_two = test (App (App (add, one), two))   three
+let test_plus_two_two = test (App (App (add, two), two))   four
+let test_mul_one_two  = test (App (App (mul, one), two))   two
+let test_mul_two_two  = test (App (App (mul, two), two))   four
+let test_pow_two_two  = test (App (App (pow, two), two))   four
 
 let () =
   let open Alcotest in

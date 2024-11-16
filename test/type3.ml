@@ -3,19 +3,24 @@ open Lib.Type
 open Lib.Eval
 open Shared
 
-let create_env pairs =
-  List.map (fun (name, typ) -> (name, typ)) pairs
+let test actual expected env () =
+  check ptype_test_eq "equal" expected (actual |> infer_type env |> Option.get)
+;;
 
-let test_infer_nat () =
-  let result = infer_type (Int 42) [] in
-  match result with
-  | Some typ -> check bool "should be Nat" true (equal_ptype typ Nat)
-  | None -> fail "Expected Some type, got None"
+let test_arr_1 = test (Abs (x, Var x))          (Arr (Var x, Var x))                []
+let test_arr_2 = test (Abs (x, Abs(y, Var x)))  (Arr (Var x, Arr (Var y, Var x)))   []
+
+let test_var1  = test (Var x)                   Nat                                 [(x, Nat)]
+let test_var2  = test (Var x)                   (Arr (Var y, Var y))                [(x, Arr (Var y, Var y))]
 
 let () =
   let open Alcotest in
   run
     "3 - Type"
-    [ "int var", [ test_case "var_int" `Quick test_infer_nat ]
+    [
+      "var 1", [ test_case (show_ptype (Var x)) `Quick test_var1];
+      "var 2", [ test_case (show_ptype (Var x)) `Quick test_var2];
+      "arrow 1", [ test_case (show_ptype (Arr (Var x, Var x))) `Quick test_arr_1];
+      "arrow 2", [ test_case (show_ptype (Arr (Arr (Var x, Var y), Var x))) `Quick test_arr_2];
     ]
 ;;

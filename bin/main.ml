@@ -1,6 +1,7 @@
 open Lib.Eval
+open Lib.Type
 
 let () =
-  let l = IfEmpty (Nil, Int 1, Int 2) |> ltr_cbv_norm in
-  show_pterm l |> print_endline
+  let t = Abs ("x", Abs("y", Var "x")) |> infer_type [] |> Option.get in
+  show_ptype t |> print_endline
 ;;

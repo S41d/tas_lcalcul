@@ -6,26 +6,26 @@ let test actual expected () =
   check pterm_test_eq "equal" expected (ltr_cbv_norm actual)
 ;;
 
-let test_add_one_two = test (Add (Int 1, Int 2)) (Int 3)
-let test_add_commutative = test (Add (Int 3, Int 5)) (ltr_cbv_norm (Add (Int 5, Int 3)))
+let test_add_one_two        = test (Add (Int 1, Int 2))                         (Int 3)
+let test_add_commutative    = test (Add (Int 3, Int 5))                         (ltr_cbv_norm (Add (Int 5, Int 3)))
 
-let test_sub_one_two = test (Sub (Int 1, Int 2)) (Int (-1))
-let test_sub_commutative = test (Sub (Int (-3), Int 5)) (ltr_cbv_norm (Sub (Int (-5), Int 3)))
+let test_sub_one_two        = test (Sub (Int 1, Int 2))                         (Int (-1))
+let test_sub_commutative    = test (Sub (Int (-3), Int 5))                      (ltr_cbv_norm (Sub (Int (-5), Int 3)))
 
-let test_cons_one = test (Cons (Int 1, Nil)) (TList [Int 1])
-let test_hd_cons_two = test (Hd (Cons (Int 2, Nil))) (Int 2)
-let test_tl_cons_two = test (Tl (Cons (Int 2, Nil))) Nil
-let test_hd_cons_three_two = test (Hd (Cons (Int 3, Cons (Int 2, Nil)))) (Int 3)
-let test_tl_cons_two_three = test (Tl (Cons (Int 2, Cons (Int 3, Nil)))) (TList [Int 3])
+let test_cons_one           = test (Cons (Int 1, Nil))                          (TList [Int 1])
+let test_hd_cons_two        = test (Hd (Cons (Int 2, Nil)))                     (Int 2)
+let test_tl_cons_two        = test (Tl (Cons (Int 2, Nil)))                     Nil
+let test_hd_cons_three_two  = test (Hd (Cons (Int 3, Cons (Int 2, Nil))))       (Int 3)
+let test_tl_cons_two_three  = test (Tl (Cons (Int 2, Cons (Int 3, Nil))))       (TList [Int 3])
 
-let test_ifz_true = test (IfZero (Int 0, Int 1, Int 2)) (Int 1)
-let test_ifz_false = test (IfZero (Int 1, Int 1, Int 2)) (Int 2)
+let test_ifz_true           = test (IfZero (Int 0, Int 1, Int 2))               (Int 1)
+let test_ifz_false          = test (IfZero (Int 1, Int 1, Int 2))               (Int 2)
 
-let test_ife_true = test (IfEmpty (Nil, Int 1, Int 2)) (Int 1)
-let test_ife_false = test (IfEmpty (Cons (Int 1, Nil), Int 1, Int 2)) (Int 2)
+let test_ife_true           = test (IfEmpty (Nil, Int 1, Int 2))                (Int 1)
+let test_ife_false          = test (IfEmpty (Cons (Int 1, Nil), Int 1, Int 2))  (Int 2)
 
-let test_fix = test (Fix (Abs ("x", Var "x"))) (Fix (Abs ("x", Var "x")))
-let test_let_simple = test (Let ("x", Int 1, Var "x")) (Int 1)
+let test_fix                = test (Fix (Abs ("x", Var "x")))                   (Fix (Abs ("x", Var "x")))
+let test_let_simple         = test (Let ("x", Int 1, Var "x"))                  (Int 1)
 
 let () =
   let open Alcotest in
