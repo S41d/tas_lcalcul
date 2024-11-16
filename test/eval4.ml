@@ -14,7 +14,7 @@ let test_sub_commutative    = test (Sub (Int (-3), Int 5))                      
 
 let test_cons_one           = test (Cons (Int 1, Nil))                          (TList [Int 1])
 let test_hd_cons_two        = test (Hd (Cons (Int 2, Nil)))                     (Int 2)
-let test_tl_cons_two        = test (Tl (Cons (Int 2, Nil)))                     Nil
+let test_tl_cons_two        = test (Tl (Cons (Int 2, Nil)))                     (TList [])
 let test_hd_cons_three_two  = test (Hd (Cons (Int 3, Cons (Int 2, Nil))))       (Int 3)
 let test_tl_cons_two_three  = test (Tl (Cons (Int 2, Cons (Int 3, Nil))))       (TList [Int 3])
 
@@ -42,7 +42,7 @@ let () =
 
       "cons 1::[] = [1]", [ test_case "cons (1, nil)" `Quick test_cons_one ];
       "hd 2::[] = 2", [ test_case "hd (cons (2, nil))" `Quick test_hd_cons_two ];
-      "tl 2::[] = []", [ test_case "tl (cons (2, nil))" `Quick test_hd_cons_two ];
+      "tl 2::[] = []", [ test_case "tl (cons (2, nil))" `Quick test_tl_cons_two ];
       "hd 3::2::[] = 3", [ test_case "hd (cons (3, cons (2, nil)))" `Quick test_hd_cons_three_two ];
       "tl 2::3::[] = [3]", [ test_case "tl (cons (2, cons (3, nil)))" `Quick test_tl_cons_two_three ];
 
