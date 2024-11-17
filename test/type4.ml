@@ -1,42 +1,36 @@
-open Alcotest
 open Lib.Type
 open Lib.Eval
 open Shared
 
-let test actual expected env () =
-  check ptype_test_eq "equal" expected (actual |> infer_type env |> Option.get)
-;;
+let test_add =        test_type (Add (Int 1, Int 2))               Nat         []
+let test_add_var =    test_type (Add (Int 1, Var x))               Nat         [(x, Nat)]
+let test_sub =        test_type (Sub (Int 1, Int 2))               Nat         []
+let test_sub_var =    test_type (Sub (Int 1, Var x))               Nat         [(x, Nat)]
 
-let test_add =        test (Add (Int 1, Int 2))               Nat         []
-let test_add_var =    test (Add (Int 1, Var x))               Nat         [(x, Nat)]
-let test_sub =        test (Sub (Int 1, Int 2))               Nat         []
-let test_sub_var =    test (Sub (Int 1, Var x))               Nat         [(x, Nat)]
+let test_list_nat_1 = test_type (Cons (Int 1, Nil))                (TList Nat) []
+let test_list_nat_2 = test_type (Cons (Int 1, Cons (Int 2, Nil)))  (TList Nat) []
 
-let test_list_nat_1 = test (Cons (Int 1, Nil))                (TList Nat) []
-let test_list_nat_2 = test (Cons (Int 1, Cons (Int 2, Nil)))  (TList Nat) []
-
-let test_let_1 =      test (Let (x, Int 1, Var x))            Nat         []
+let test_let_1 =      test_type (Let (x, Int 1, Var x))            Nat         []
 let test_let_2 =
   let fn = Abs (x, (Let (y, Add (Var x, Int 2), (Sub (Var x, Var y))))) in
-  test (App (fn, Int 4)) Nat []
+  test_type (App (fn, Int 4)) Nat []
 ;;
 
 let test_let_3 =
   let term = Let (f, Abs (x, Add (Var x, Int 2)), App (Var f, Int 4)) in
-  test term Nat []
+  test_type term Nat []
 ;;
 
 let test_let_4 =
   let term = Let (f, Abs (x, App (Var x, Int 2)), Var f) in
   let expected = Arr (Arr (Nat, Var x), Var x) in
-  test term expected []
+  test_type term expected []
 ;;
-
 
 let test_factorial =
   let fact = Fix (Abs ("f", Abs ("n", IfZero (Var "n", Int 1, Mul (Var "n", App (Var "f", Sub (Var "n", Int 1))))))) in
   let term = App (fact, Int 2) |> ltr_cbv_norm in
-  test term Nat []
+  test_type term Nat []
 ;;
 
 let () =

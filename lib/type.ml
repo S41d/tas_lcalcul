@@ -6,6 +6,8 @@ type ptype =
   | Nat
   | TList of ptype
   | Poly of string * ptype
+  | Unit
+  | Ref of ptype
 
 let rec show_ptype = function
   | Var x -> x
@@ -13,6 +15,9 @@ let rec show_ptype = function
   | Nat -> "Nat"
   | TList t -> sprintf "%s list" (show_ptype t)
   | Poly (s, t) -> sprintf "/%s %s" s (show_ptype t)
+  | Unit -> "Unit"
+  | Ref t -> sprintf "ref %s" (show_ptype t)
+;;
 
 let rec pp_ptype fmt = function
   | Var v -> fprintf fmt "%s" v
@@ -20,6 +25,9 @@ let rec pp_ptype fmt = function
   | Nat -> fprintf fmt "Nat"
   | TList t -> fprintf fmt "%a list" pp_ptype t
   | Poly (s, t) -> fprintf fmt "/%s %a" s pp_ptype t
+  | Unit -> fprintf fmt "Unit"
+  | Ref t -> fprintf fmt "ref %a" pp_ptype t
+;;
 
 let rec equal_ptype t1 t2 =
   match t1, t2 with
@@ -29,18 +37,41 @@ let rec equal_ptype t1 t2 =
   | TList t1, TList t2 -> equal_ptype t1 t2
   | Poly (s, t1), Poly (s', t2) -> s = s' && equal_ptype t1 t2
   | _ -> false
+;;
 
 let counter_t = ref 0
 
 let new_type () =
   counter_t := succ !counter_t;
   "T" ^ string_of_int !counter_t
+;;
+
+;;
+
+let generalize env typ =
+  let rec free_vars = function
+    | Var x -> [x]
+    | Arr (t1, t2) -> List.sort_uniq String.compare (free_vars t1 @ free_vars t2)
+    | Nat -> []
+    | TList t -> free_vars t
+    | Poly (x, t) -> List.filter ((<>) x) (free_vars t)
+    | Unit -> []
+    | Ref t -> free_vars t
+  in
+
+  let env_free_vars =
+    env |> List.map snd |> List.map free_vars |> List.flatten |> List.sort_uniq String.compare in
+  let type_free_vars = free_vars typ in
+  let vars_to_quantify =
+    List.filter (fun v -> not (List.mem v env_free_vars)) type_free_vars
+  in
+  List.fold_left (fun t v -> Poly (v, t)) typ vars_to_quantify
+;;
 
 type equa = (ptype * ptype) list
 type env = (string * ptype) list
 
 exception VarNotFound
-exception Timeout
 
 let rec search_type v env =
   match env with
@@ -77,11 +108,28 @@ let rec generate_equa term typ env =
     generate_equa h typ_el env @ generate_equa t (TList typ_el) env @ [(typ, TList typ_el)]
 
   | Eval.Nil -> [(typ, TList (Var (new_type ())))]
+
   | Eval.Let (var, t1, t2) ->
     let tbody = infer_type env t1 in
     (match tbody with
-    | Some tbody -> generate_equa t2 typ ((var, tbody) :: env)
-    | None -> failwith "Cannot infer type")
+     | Some tbody -> generate_equa t2 typ ((var, tbody) :: env)
+     | None -> failwith "Cannot infer type")
+
+  | Eval.Unit -> [(typ, Unit)]
+
+  | Eval.Ref t ->
+    let ntype = new_type () in
+    generate_equa t (Ref (Var (ntype))) env @ [(typ, Ref (Var (ntype)))]
+
+  | Eval.Deref t -> 
+    let ntype = new_type () in
+    generate_equa t (Ref (Var (ntype))) env @ [(typ, Var (ntype))]
+
+  | Eval.Assign (t1, t2) ->
+    let t1' = generate_equa t1 (Ref (Var (new_type ()))) env in
+    let t2' = generate_equa t2 (Var (new_type ())) env in
+    t1' @ t2' @ [(typ, Unit)]
+
   | _ -> []
 
 and occur_check x t =
@@ -91,6 +139,8 @@ and occur_check x t =
     | Nat -> false
     | TList t' -> aux x t'
     | Poly (_, t') -> aux x t'
+    | Unit -> false
+    | Ref t' -> aux x t'
   in aux x t
 
 and subst x t = function
@@ -99,6 +149,8 @@ and subst x t = function
   | Nat -> Nat
   | TList t' -> TList (subst x t t')
   | Poly (s, t') -> Poly (s, subst x t t')
+  | Unit -> Unit
+  | Ref t' -> Ref (subst x t t')
 
 and subst_global x t = function
   | [] -> []
@@ -106,6 +158,12 @@ and subst_global x t = function
 
 
 and unify_step equations =
+  let open_poly name t =
+    let fresh = "T" ^ string_of_int (!counter_t + 1) in
+    counter_t := !counter_t + 1;
+    subst name (Var fresh) t
+  in
+
   match equations with
   | [] -> Ok []
   | (t1, t2) :: rest when t1 = t2 -> Ok rest
@@ -113,12 +171,15 @@ and unify_step equations =
   | (Var x, t) :: rest when not (occur_check x t) -> Ok (subst_global x t rest)
   | (t, Var x) :: rest when not (occur_check x t) -> Ok (subst_global x t rest)
   | (Arr (t1, t2), Arr (t3, t4)) :: rest -> Ok ((t1, t3) :: (t2, t4) :: rest)
+  | (Poly (id, tpoly), t2) :: rest -> unify_step ((open_poly id tpoly, t2) :: rest)
+  | (t1, Poly (id, tpoly)) :: rest -> unify_step ((t1, open_poly id tpoly) :: rest)
+  | (Ref t1, Ref t2) :: rest -> Ok ((t1, t2) :: rest)
   | (t1, t2) :: _ -> Error ("Cannot unify " ^ show_ptype t1 ^ " with " ^ show_ptype t2)
 
 and unify equations timeout =
   if timeout = 0 then Error "Timeout"
   else match unify_step equations with
-    | Ok [] -> Ok []
+    | Ok [] -> Error "Cannot unify"
     | Ok (t::[]) -> Ok [t]
     | Ok eqs -> unify eqs (pred timeout)
     | Error msg -> Error msg
