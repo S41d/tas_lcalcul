@@ -8,6 +8,7 @@ type pterm =
   | Int of int
   | Add of pterm * pterm
   | Sub of pterm * pterm
+  | Mul of pterm * pterm
 
   | TList of pterm list
   | Cons of pterm * pterm
@@ -29,6 +30,7 @@ let rec show_pterm_simp t =
   | Int n -> string_of_int n
   | Add (t1, t2) -> sprintf "(%s + %s)" (show_pterm_simp t1) (show_pterm_simp t2)
   | Sub (t1, t2) -> sprintf "(%s - %s)" (show_pterm_simp t1) (show_pterm_simp t2)
+  | Mul (t1, t2) -> sprintf "(%s * %s)" (show_pterm_simp t1) (show_pterm_simp t2)
 
   | TList l -> sprintf "[%s]" (String.concat "; " (List.map show_pterm_simp l))
   | Cons (h, t) -> sprintf "(%s :: %s)" (show_pterm_simp h) (show_pterm_simp t)
@@ -43,6 +45,9 @@ let rec show_pterm_simp t =
 ;;
 
 let show_pterm t =
+  let handle_abs was_abs str = 
+    if was_abs then " . " ^ str else str
+  in
   let rec aux t was_abs =
     match t with
     | Var id when was_abs -> sprintf " . %s" id
@@ -51,7 +56,22 @@ let show_pterm t =
     | App (t1, t2) -> sprintf "(%s %s)" (aux t1 false) (aux t2 false)
     | Abs (id, t) when was_abs -> sprintf "%s%s" id (aux t true)
     | Abs (id, t) -> sprintf "(\\%s%s)" id (aux t true)
-    | _ -> show_pterm_simp t
+
+    | Int n -> string_of_int n |> handle_abs was_abs
+    | Add (t1, t2) -> (sprintf "(%s + %s)" (aux t1 false) (aux t2 false)) |> handle_abs was_abs
+    | Sub (t1, t2) -> (sprintf "(%s - %s)" (aux t1 false) (aux t2 false)) |> handle_abs was_abs
+    | Mul (t1, t2) -> (sprintf "(%s * %s)" (aux t1 false) (aux t2 false)) |> handle_abs was_abs
+
+    | TList l -> (sprintf "[%s]" (String.concat "; " (List.map (fun x -> aux x false) l))) |> handle_abs was_abs
+    | Cons (h, t) -> (sprintf "(%s :: %s)" (aux h false) (aux t false)) |> handle_abs was_abs
+    | Nil -> handle_abs was_abs "[]"
+    | Hd l -> (sprintf "hd %s" (aux l false)) |> handle_abs was_abs
+    | Tl l -> (sprintf "tl %s" (aux l false)) |> handle_abs was_abs
+
+    | IfZero (c, t, e) -> (sprintf "ifz %s then %s else %s" (aux c false) (aux t false) (aux e false)) |> handle_abs was_abs
+    | IfEmpty (c, t, e) -> (sprintf "ife %s then %s else %s" (aux c false) (aux t false) (aux e false)) |> handle_abs was_abs
+    | Fix t -> (sprintf "fix %s" (aux t false)) |> handle_abs was_abs
+    | Let (id, t1, t2) -> (sprintf "let %s = %s in \n\t%s" id (aux t1 false) (aux t2 false)) |> handle_abs was_abs
   in
   aux t false
 ;;
@@ -107,14 +127,15 @@ let rec alphaconv term =
   let rec aux cur_var repl_var = function
     | Var v -> if cur_var = v then Var repl_var else Var v
     | Abs (id, t) ->
-      let passed = aux cur_var repl_var t in
       let nvar = new_var () in
-      Abs (nvar, aux id nvar passed)
+      let first = aux id nvar t in
+      Abs (nvar, aux cur_var repl_var first)
     | App (t1, t2) -> App (aux cur_var repl_var t1, aux cur_var repl_var t2)
 
     | Int _ as n -> n
     | Add (t1, t2) -> Add (aux cur_var repl_var t1, aux cur_var repl_var t2)
     | Sub (t1, t2) -> Sub (aux cur_var repl_var t1, aux cur_var repl_var t2)
+    | Mul (t1, t2) -> Mul (aux cur_var repl_var t1, aux cur_var repl_var t2)
 
     | TList terms -> TList (List.map (aux cur_var repl_var) terms)
     | Cons (h, t) -> Cons (aux cur_var repl_var h, aux cur_var repl_var t)
@@ -140,6 +161,7 @@ let rec alphaconv term =
   | Int _ -> term
   | Add (t1, t2) -> Add (alphaconv t1, alphaconv t2)
   | Sub (t1, t2) -> Sub (alphaconv t1, alphaconv t2)
+  | Mul (t1, t2) -> Mul (alphaconv t1, alphaconv t2)
 
   | TList terms -> TList (List.map alphaconv terms)
   | Cons (h, t) -> Cons (alphaconv h, alphaconv t)
@@ -163,6 +185,7 @@ let rec subst id to_put = function
   | Int _ as n -> n
   | Add (t1, t2) -> Add (subst id to_put t1, subst id to_put t2)
   | Sub (t1, t2) -> Sub (subst id to_put t1, subst id to_put t2)
+  | Mul (t1, t2) -> Mul (subst id to_put t1, subst id to_put t2)
 
   | TList terms -> TList (List.map (fun x -> subst id to_put x) terms)
   | Cons (h, t) -> Cons (subst id to_put h, subst id to_put t)
@@ -172,7 +195,7 @@ let rec subst id to_put = function
 
   | IfZero (cond, tthen, telse) -> IfZero ((subst id to_put cond), (subst id to_put tthen), (subst id to_put telse))
   | IfEmpty (cond, tthen, telse) -> IfEmpty ((subst id to_put cond), (subst id to_put tthen), (subst id to_put telse))
-  | Fix t -> subst id to_put t
+  | Fix t -> Fix (subst id to_put t)
   | Let (id, teq, tin) -> Let (id, subst id to_put teq, subst id to_put tin)
 ;;
 
@@ -183,6 +206,7 @@ let rec is_value = function
 ;;
 
 let rec ltr_ctb_step t =
+  print_endline (show_pterm t);
   let step_lr left right =
     match ltr_ctb_step left with
     | Some t -> Some (t, right)
@@ -191,43 +215,29 @@ let rec ltr_ctb_step t =
       | None -> None
   in
   match t with
-  | Abs (x, t) ->
-    Option.map (fun t' -> Abs (x, t')) (ltr_ctb_step t)
-
-  | App (Abs (x, t), targ) when is_value targ ->
-    Some (subst x targ t)
-
-  | App (tfun, targ) ->
-    Option.map (fun (l, r) -> App (l, r)) (step_lr tfun targ)
+  | Abs (x, t) -> Option.map (fun t' -> Abs (x, t')) (ltr_ctb_step t)
+  | App (Abs (x, t), targ) when is_value targ -> Some (subst x targ t)
+  | App (tfun, targ) -> Option.map (fun (l, r) -> App (l, r)) (step_lr tfun targ)
 
   | Var _ -> None
-
   | Int _ -> None
 
-  | Add (t1, t2) ->
-    (match step_lr t1 t2 with
-     | Some (l, r) -> Some (Add (l, r))
-     | None -> match t1, t2 with
-       | Int n1, Int n2 -> Some (Int (n1 + n2))
-       | _ -> None)
+  | Add (Int x, Int y) -> Some (Int (x + y))
+  | Add (t1, t2) -> Option.map (fun (l, r) -> Add (l, r)) (step_lr t1 t2)
 
-  | Sub (t1, t2) ->
-    (match step_lr t1 t2 with
-     | Some (l, r) -> Some (Add (l, r))
-     | None -> match t1, t2 with
-       | Int n1, Int n2 -> Some (Int (n1 - n2))
-       | _ -> None)
+  | Sub (Int x, Int y) -> Some (Int (x - y))
+  | Sub (t1, t2) -> Option.map (fun (l, r) -> Sub (l, r)) (step_lr t1 t2)
 
+  | Mul (Int x, Int y) -> Some (Int (x * y))
+  | Mul (t1, t2) -> Option.map (fun (l, r) -> Mul (l, r)) (step_lr t1 t2)
+
+  | TList [] -> None
   | TList terms ->
-    (match terms with
-     | [] -> None
-     | _ ->
-       let res = List.map (fun t -> ltr_ctb_step t) terms in
-       match List.hd res with
-       | None -> None
-       (* we assume that if one element is reduceable then all of the elements
-          of the list are reduceable as they are all of the same type *)
-       | _ -> Some (TList (List.map (fun x -> Option.get(x)) res)))
+    (match (List.hd terms) |> ltr_ctb_step with
+     | None -> None
+     (* we assume that if one element is reduceable then all of the elements
+        of the list are reduceable as they are all of the same type *)
+     | _ -> Some (TList (List.map (fun x -> x |> ltr_ctb_step |> Option.get) terms)))
 
   | Cons (h, t) ->
     (match step_lr h t with
@@ -239,19 +249,13 @@ let rec ltr_ctb_step t =
 
   | Nil -> Some (TList [])
 
-  | Hd l ->
-    (match ltr_ctb_step l with
-     | Some t -> Some (Hd t)
-     | None -> match l with
-       |  TList (h :: _)-> Some h
-       |  _ -> None)
+  | Hd (TList []) -> None
+  | Hd (TList (h :: _)) -> Some h
+  | Hd l -> Option.map (fun t -> Hd t) (ltr_ctb_step l)
 
-  | Tl l ->
-    (match ltr_ctb_step l with
-     | Some t -> Some (Tl t)
-     | None -> match l with
-       |  TList (_ :: tl)-> Some (TList tl)
-       |  _ -> None)
+  | Tl (TList []) -> None
+  | Tl (TList (_ :: tl)) -> Some (TList tl)
+  | Tl l -> Option.map (fun t -> Tl t) (ltr_ctb_step l)
 
   | IfZero (cond, tthen, telse) ->
     (match ltr_ctb_step cond with
@@ -269,6 +273,9 @@ let rec ltr_ctb_step t =
        | TList _ -> Some telse
        | _ -> None)
 
+  | Fix (Abs (x, tbody)) ->
+    let t = subst x (Fix (Abs (x, tbody))) tbody in 
+    Some (alphaconv t)
   | Fix t -> Option.map (fun t -> Fix t) (ltr_ctb_step t)
 
   | Let (id, te, tin) ->
@@ -285,10 +292,10 @@ let ltr_cbv_norm t =
   in aux (alphaconv t)
 ;;
 
-let rec ltr_cbv_norm_timeout t n =
+let rec ltr_cbv_norm_timeout n t =
   if n > 0
   then match ltr_ctb_step t with
-    | Some x -> ltr_cbv_norm_timeout x (n - 1)
+    | Some x -> ltr_cbv_norm_timeout (n - 1) x
     | None -> t
   else t
 ;;
