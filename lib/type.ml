@@ -83,51 +83,51 @@ let rec search_type v env =
 
 let rec generate_equa term typ env =
   match term with
-  | Eval.Var var -> [(typ, search_type var env)]
+  | Ast.Var var -> [(typ, search_type var env)]
 
-  | Eval.Abs (var, term) ->
+  | Ast.Abs (var, term) ->
     let ta = Var (new_type ()) in
     let tr = Var (new_type ()) in
     let tbody = generate_equa term tr ((var, ta) :: env) in
     tbody @ [(typ, Arr (ta, tr))]
 
-  | Eval.App (tfun, targ) ->
+  | Ast.App (tfun, targ) ->
     let ta = Var (new_type ()) in
     let tr = typ in
     generate_equa tfun (Arr (ta, tr)) env @ generate_equa targ ta env
 
-  | Eval.Int _ -> [(typ, Nat)]
+  | Ast.Int _ -> [(typ, Nat)]
 
-  | Eval.Add (t1, t2) | Eval.Sub (t1, t2) ->
+  | Ast.Add (t1, t2) | Ast.Sub (t1, t2) ->
     generate_equa t1 Nat env @ generate_equa t2 Nat env @ [(typ, Nat)]
 
-  | Eval.TList l ->
+  | Ast.TList l ->
     let typ_el = Var (new_type ()) in
     List.fold_left (fun acc x -> acc @ generate_equa x typ_el env) [] l @ [(typ, TList typ_el)]
 
-  | Eval.Cons (h, t) ->
+  | Ast.Cons (h, t) ->
     let typ_el = Var (new_type ()) in
     generate_equa h typ_el env @ generate_equa t (TList typ_el) env @ [(typ, TList typ_el)]
 
-  | Eval.Nil -> [(typ, TList (Var (new_type ())))]
+  | Ast.Nil -> [(typ, TList (Var (new_type ())))]
 
-  | Eval.Let (var, t1, t2) ->
+  | Ast.Let (var, t1, t2) ->
     let tbody = infer_type env t1 in
     (match tbody with
      | Some tbody -> generate_equa t2 typ ((var, tbody) :: env)
      | None -> failwith "Cannot infer type")
 
-  | Eval.Unit -> [(typ, Unit)]
+  | Ast.Unit -> [(typ, Unit)]
 
-  | Eval.Ref t ->
+  | Ast.Ref t ->
     let ntype = Var (new_type ()) in
     generate_equa t ntype env @ [(typ, Ref ntype)]
 
-  | Eval.Deref t ->
+  | Ast.Deref t ->
     let ntype = Var (new_type ()) in
     generate_equa t (Ref ntype) env @ [(typ, ntype)]
 
-  | Eval.Assign (t1, t2) ->
+  | Ast.Assign (t1, t2) ->
     let ntype = Var (new_type ()) in
     let t1' = generate_equa t1 (Ref ntype) env in
     let t2' = generate_equa t2 ntype env in

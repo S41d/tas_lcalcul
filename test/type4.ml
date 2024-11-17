@@ -1,5 +1,6 @@
-open Lib.Type
+open Lib.Ast
 open Lib.Eval
+open Lib.Type
 open Shared
 
 let test_add =        test_type (Add (Int 1, Int 2))               Nat         []

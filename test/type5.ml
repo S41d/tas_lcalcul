@@ -1,5 +1,4 @@
 open Lib.Type
-open Lib.Eval
 open Shared
 
 let test_unit             = test_type Unit                                                                     Unit       []

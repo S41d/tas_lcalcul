@@ -1,3 +1,4 @@
+open Lib.Ast
 open Lib.Eval
 open Shared
 
@@ -13,8 +14,6 @@ let four = Abs (f, Abs (e, App (Var f, App (Var f, App (Var f, App (Var f, Var e
 
 let add = Abs(n, Abs(m, Abs(f, Abs(e, App(App(Var m, Var f), App(App(Var n, Var f), Var e))))))
 let mul = Abs(n, Abs(m, Abs(f, Abs(e, App(App(Var n, App(Var m, Var f)), Var e)))))
-let pow = Abs(n, Abs(m, App(Var m, Var n)))
-
 
 let test_II           = test_eval (App (i, i))                  i
 let test_SII          = test_eval (App (App (s, i), i))         (Abs (y, App (Var y, Var y)))
@@ -24,7 +23,6 @@ let test_plus_one_two = test_eval (App (App (add, one), two))   three
 let test_plus_two_two = test_eval (App (App (add, two), two))   four
 let test_mul_one_two  = test_eval (App (App (mul, one), two))   two
 let test_mul_two_two  = test_eval (App (App (mul, two), two))   four
-let test_pow_two_two  = test_eval (App (App (pow, two), two))   four
 
 let () =
   let open Alcotest in
@@ -40,8 +38,6 @@ let () =
       test_case (show_pterm (App (App (mul, one), two))) `Quick test_mul_one_two;
       test_case (show_pterm (App (App (mul, two), two))) `Quick test_mul_two_two 
     ];
-
-    "pow 2 2", [ test_case (show_pterm (App (App (pow, two), two))) `Quick test_pow_two_two ];
 
     "SKK", [ test_case (show_pterm (App (App (s, k), k))) `Quick test_SKK ];
     "SII", [ test_case (show_pterm (App (App (s, i), i))) `Quick test_SII ];

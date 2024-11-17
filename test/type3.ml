@@ -1,5 +1,5 @@
+open Lib.Ast
 open Lib.Type
-open Lib.Eval
 open Shared
 
 let test_arr_1 = test_type (Abs (x, Var x))          (Arr (Var x, Var x))                []
