@@ -36,6 +36,8 @@ let rec equal_ptype t1 t2 =
   | Nat, Nat -> true
   | TList t1, TList t2 -> equal_ptype t1 t2
   | Poly (s, t1), Poly (s', t2) -> s = s' && equal_ptype t1 t2
+  | Unit, Unit -> true
+  | Ref t1, Ref t2 -> equal_ptype t1 t2
   | _ -> false
 ;;
 
@@ -118,16 +120,17 @@ let rec generate_equa term typ env =
   | Eval.Unit -> [(typ, Unit)]
 
   | Eval.Ref t ->
-    let ntype = new_type () in
-    generate_equa t (Ref (Var (ntype))) env @ [(typ, Ref (Var (ntype)))]
+    let ntype = Var (new_type ()) in
+    generate_equa t ntype env @ [(typ, Ref ntype)]
 
-  | Eval.Deref t -> 
-    let ntype = new_type () in
-    generate_equa t (Ref (Var (ntype))) env @ [(typ, Var (ntype))]
+  | Eval.Deref t ->
+    let ntype = Var (new_type ()) in
+    generate_equa t (Ref ntype) env @ [(typ, ntype)]
 
   | Eval.Assign (t1, t2) ->
-    let t1' = generate_equa t1 (Ref (Var (new_type ()))) env in
-    let t2' = generate_equa t2 (Var (new_type ())) env in
+    let ntype = Var (new_type ()) in
+    let t1' = generate_equa t1 (Ref ntype) env in
+    let t2' = generate_equa t2 ntype env in
     t1' @ t2' @ [(typ, Unit)]
 
   | _ -> []
@@ -165,7 +168,7 @@ and unify_step equations =
   in
 
   match equations with
-  | [] -> Ok []
+  | [] -> Error "Empty equation"
   | (t1, t2) :: rest when t1 = t2 -> Ok rest
   | (TList t1, TList t2) :: rest -> unify_step ((t1, t2) :: rest)
   | (Var x, t) :: rest when not (occur_check x t) -> Ok (subst_global x t rest)
@@ -173,13 +176,12 @@ and unify_step equations =
   | (Arr (t1, t2), Arr (t3, t4)) :: rest -> Ok ((t1, t3) :: (t2, t4) :: rest)
   | (Poly (id, tpoly), t2) :: rest -> unify_step ((open_poly id tpoly, t2) :: rest)
   | (t1, Poly (id, tpoly)) :: rest -> unify_step ((t1, open_poly id tpoly) :: rest)
-  | (Ref t1, Ref t2) :: rest -> Ok ((t1, t2) :: rest)
+  | (Ref t1, Ref t2) :: rest -> unify_step ((t1, t2) :: rest)
   | (t1, t2) :: _ -> Error ("Cannot unify " ^ show_ptype t1 ^ " with " ^ show_ptype t2)
 
 and unify equations timeout =
   if timeout = 0 then Error "Timeout"
   else match unify_step equations with
-    | Ok [] -> Error "Cannot unify"
     | Ok (t::[]) -> Ok [t]
     | Ok eqs -> unify eqs (pred timeout)
     | Error msg -> Error msg
@@ -187,6 +189,7 @@ and unify equations timeout =
 and infer_type env term =
   let res_type = Var (new_type ()) in
   let equations = generate_equa term res_type env in
+  List.iter (fun (t1, t2) -> print_endline (show_ptype t1 ^ " = " ^ show_ptype t2)) equations;
   match equations with
   | [] -> None
   | h::[] -> Some (snd h)

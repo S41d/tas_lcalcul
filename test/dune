@@ -17,3 +17,7 @@
 (test
   (name eval5)
   (libraries alcotest lcalcul_interpreter.shared))
+
+(test
+  (name type5)
+  (libraries alcotest lcalcul_interpreter.shared))

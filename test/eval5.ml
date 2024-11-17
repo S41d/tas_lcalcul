@@ -14,7 +14,7 @@ let test_assign_and_deref = test_eval (Let (x, Ref (Int 1), Let (us, Assign (Var
 
 let () =
   let open Alcotest in
-  run "Evaluation Tests" [
+  run "5 - Eval" [
     "unit", [
       test_case "unit value" `Quick test_unit;
     ];
