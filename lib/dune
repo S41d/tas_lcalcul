@@ -1,3 +1,9 @@
 (library
  (name lib)
  (public_name lcalcul_interpreter))
+
+(ocamllex
+ (modules lexer))
+
+(menhir
+ (modules parser))

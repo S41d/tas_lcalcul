@@ -4,26 +4,26 @@ open Ast
 let rec show_pterm_simp t =
   match t with
   | Var id -> id
-  | Abs (id, t) -> sprintf "\\%s . %s" id (show_pterm_simp t)
-  | App (t1, t2) -> sprintf "(%s %s)" (show_pterm_simp t1) (show_pterm_simp t2)
+  | Abs (id, t) -> sprintf "abs (%s, %s)" id (show_pterm_simp t)
+  | App (t1, t2) -> sprintf "app (%s, %s)" (show_pterm_simp t1) (show_pterm_simp t2)
 
   | Int n -> string_of_int n
-  | Add (t1, t2) -> sprintf "(%s + %s)" (show_pterm_simp t1) (show_pterm_simp t2)
-  | Sub (t1, t2) -> sprintf "(%s - %s)" (show_pterm_simp t1) (show_pterm_simp t2)
-  | Mul (t1, t2) -> sprintf "(%s * %s)" (show_pterm_simp t1) (show_pterm_simp t2)
+  | Add (t1, t2) -> sprintf "add (%s, %s)" (show_pterm_simp t1) (show_pterm_simp t2)
+  | Sub (t1, t2) -> sprintf "sub (%s, %s)" (show_pterm_simp t1) (show_pterm_simp t2)
+  | Mul (t1, t2) -> sprintf "mul (%s, %s)" (show_pterm_simp t1) (show_pterm_simp t2)
 
-  | TList l -> sprintf "[%s]" (String.concat "; " (List.map show_pterm_simp l))
-  | Cons (h, t) -> sprintf "(%s :: %s)" (show_pterm_simp h) (show_pterm_simp t)
+  | TList l -> sprintf "tlist [%s]" (String.concat "; " (List.map show_pterm_simp l))
+  | Cons (h, t) -> sprintf "cons (%s, %s)" (show_pterm_simp h) (show_pterm_simp t)
   | Nil -> "[]"
-  | Hd l -> sprintf "hd %s" (show_pterm_simp l)
-  | Tl l -> sprintf "tl %s" (show_pterm_simp l)
+  | Hd l -> sprintf "hd (%s)" (show_pterm_simp l)
+  | Tl l -> sprintf "tl (%s)" (show_pterm_simp l)
 
   | IfZero (c, t, e) -> sprintf "ifz (%s) (%s) (%s)" (show_pterm_simp c) (show_pterm_simp t) (show_pterm_simp e)
   | IfEmpty (c, t, e) -> sprintf "ife (%s), (%s), (%s)" (show_pterm_simp c) (show_pterm_simp t) (show_pterm_simp e)
   | Fix t -> sprintf "fix (%s)" (show_pterm_simp t)
   | Let (id, t1, t2) -> sprintf "let (%s, %s, %s)" id (show_pterm_simp t1) (show_pterm_simp t2)
 
-  | Region i -> sprintf "{{%d}}" i
+  | Region i -> sprintf "region {{%d}}" i
   | Unit -> "unit"
 
   | Ref t -> sprintf "ref (%s)" (show_pterm_simp t)
@@ -104,20 +104,20 @@ let rec equal_pterm t1 t2 =
 ;;
 
 (* created by chatgpt *)
+let var_counter = ref 1
 let create_var_generator () =
-  let counter = ref 1 in
   let current_char = ref 'a' in
   fun () ->
     let result =
-      if !counter = 1 then
+      if !var_counter = 1 then
         Printf.sprintf "%c" !current_char
       else
-        Printf.sprintf "%c%d" !current_char !counter
+        Printf.sprintf "%c%d" !current_char !var_counter
     in
     (* Move to the next character *)
     if !current_char = 'z' then (
       current_char := 'a';
-      incr counter
+      incr var_counter
     ) else
       current_char := Char.chr (Char.code !current_char + 1);
     result
@@ -229,7 +229,7 @@ let rec is_value = function
   | _ -> true
 ;;
 
-let rec ltr_ctb_step (state: 'a list) t =
+let rec ltr_ctb_step state t =
   let step_lr state left right =
     match ltr_ctb_step state left with
     | Some (nstate, t) -> Some (nstate, (t, right))
@@ -250,7 +250,6 @@ let rec ltr_ctb_step (state: 'a list) t =
     (match step_lr state tfun targ with
      | Some (nstate, (l, r)) -> Some (nstate, App (l, r))
      | None -> None)
-
 
   | Add (Int x, Int y) -> Some (state, Int (x + y))
   | Add (t1, t2) -> Option.map (fun (nstate, (l, r)) -> (nstate, Add (l, r))) (step_lr state t1 t2)
@@ -303,14 +302,14 @@ let rec ltr_ctb_step (state: 'a list) t =
 
   | IfEmpty (cond, tthen, telse) ->
     (match ltr_ctb_step state cond with
-     | Some (nstate, t) -> Some (nstate, IfEmpty (t, tthen, telse))
+     | Some (nstate, t) -> print_endline "inside some"; Some (nstate, IfEmpty (t, tthen, telse))
      | None -> match cond with
        | TList [] -> Some (state, tthen)
        | TList _ -> Some (state, telse)
        | _ -> None)
 
   | Fix (Abs (x, tbody)) ->
-    let t = subst x (Fix (Abs (x, tbody))) tbody in 
+    let t = subst x (Fix (Abs (x, tbody))) tbody in
     Some (state, alphaconv t)
   | Fix t -> Option.map (fun (nstate, t) -> (nstate, Fix t)) (ltr_ctb_step state t)
 
@@ -336,21 +335,23 @@ let rec ltr_ctb_step (state: 'a list) t =
 
 let ltr_cbv_norm t =
   region_counter := 0;
+  var_counter := 1;
   let rec aux state t =
     match ltr_ctb_step state t with
     | Some (nstate, x) -> aux nstate x
     | None -> t
-  in aux [] t
+  in aux [] (alphaconv t)
 ;;
 
 let ltr_cbv_norm_timeout n state t =
   region_counter := 0;
+  var_counter := 1;
   let rec aux n state t =
     if n > 0
     then match ltr_ctb_step state t with
       | Some (nstate, x) -> aux (n - 1) nstate x
       | None -> t
     else t
-  in aux n state t
+  in aux n state (alphaconv t)
 ;;
 

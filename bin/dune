@@ -1,5 +1,11 @@
 (executable
  (public_name main)
- (name main)
+ (name eval)
+ (modes byte native)
+ (libraries lcalcul_interpreter))
+
+(executable
+ (public_name type_check)
+ (name type)
  (modes byte native)
  (libraries lcalcul_interpreter))

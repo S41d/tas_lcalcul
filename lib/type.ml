@@ -48,8 +48,6 @@ let new_type () =
   "T" ^ string_of_int !counter_t
 ;;
 
-;;
-
 let generalize env typ =
   let rec free_vars = function
     | Var x -> [x]
@@ -98,7 +96,7 @@ let rec generate_equa term typ env =
 
   | Ast.Int _ -> [(typ, Nat)]
 
-  | Ast.Add (t1, t2) | Ast.Sub (t1, t2) ->
+  | Ast.Add (t1, t2) | Ast.Sub (t1, t2) | Ast.Mul (t1, t2) ->
     generate_equa t1 Nat env @ generate_equa t2 Nat env @ [(typ, Nat)]
 
   | Ast.TList l ->
@@ -110,6 +108,7 @@ let rec generate_equa term typ env =
     generate_equa h typ_el env @ generate_equa t (TList typ_el) env @ [(typ, TList typ_el)]
 
   | Ast.Nil -> [(typ, TList (Var (new_type ())))]
+
 
   | Ast.Let (var, t1, t2) ->
     let tbody = infer_type env t1 in
@@ -132,6 +131,26 @@ let rec generate_equa term typ env =
     let t1' = generate_equa t1 (Ref ntype) env in
     let t2' = generate_equa t2 ntype env in
     t1' @ t2' @ [(typ, Unit)]
+
+  | Ast.IfZero (cond, then_branch, else_branch) ->
+    generate_equa cond Nat env @
+    generate_equa then_branch typ env @
+    generate_equa else_branch typ env
+
+  | Ast.IfEmpty (cond, then_branch, else_branch) ->
+    let cond_type = TList (Var (new_type ())) in
+    generate_equa cond cond_type env @
+    generate_equa then_branch typ env @
+    generate_equa else_branch typ env
+
+  | Ast.Hd l ->
+    generate_equa l (TList typ) env
+
+  | Ast.Tl l ->
+    (* l must be a list of some type, result must be a list of same type *)
+    let elem_type = Var (new_type ()) in
+    generate_equa l (TList elem_type) env @
+    [(typ, TList elem_type)]
 
   | _ -> []
 
@@ -158,7 +177,6 @@ and subst x t = function
 and subst_global x t = function
   | [] -> []
   | (t1, t2)::tl -> ((subst x t t1), (subst x t t2))::(subst_global x t tl)
-
 
 and unify_step equations =
   let open_poly name t =
@@ -189,7 +207,6 @@ and unify equations timeout =
 and infer_type env term =
   let res_type = Var (new_type ()) in
   let equations = generate_equa term res_type env in
-  List.iter (fun (t1, t2) -> print_endline (show_ptype t1 ^ " = " ^ show_ptype t2)) equations;
   match equations with
   | [] -> None
   | h::[] -> Some (snd h)

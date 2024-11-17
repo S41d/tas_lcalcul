@@ -14,6 +14,7 @@
 
 (license MIT)
 
+(using menhir 3.0)
 ; (documentation https://url/to/documentation)
 
 (package

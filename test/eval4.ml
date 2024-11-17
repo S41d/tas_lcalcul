@@ -27,7 +27,6 @@ let test_ife_false          = test_eval (IfEmpty (Cons (Int 1, Nil), Int 1, Int 
 let test_let_simple         = test_eval (Let (x, Int 1, Var x))                      (Int 1)
 
 let test_factorial =
-  let f = "factorial" in
   let fact = Fix (Abs (f, Abs (n, IfZero (Var n, Int 1, Mul (Var n, App (Var f, Sub (Var n, Int 1))))))) in
   test_eval (App (fact, Int 2)) (Int 2)
 ;;
